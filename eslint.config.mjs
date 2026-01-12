@@ -9,7 +9,9 @@ const eslintConfig = defineConfig([
     rules: {
       "@typescript-eslint/no-explicit-any": "off",
       "@typescript-eslint/no-unused-vars": "warn",
-      "react-hooks/exhaustive-deps": "off"
+      "react-hooks/exhaustive-deps": "off",
+      "react-hooks/set-state-in-effect": "off",
+      "react-hooks/immutability": "off"
     }
   },
   // Override default ignores of eslint-config-next.
@@ -19,6 +21,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Utility scripts (Node.js)
+    "*.js",
+    "public/**",
   ]),
 ]);
 

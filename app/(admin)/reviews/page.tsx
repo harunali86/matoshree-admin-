@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { getReviews, updateReviewVerified, deleteReview } from '@/lib/actions';
-import { Star, Search, Trash2, CheckCircle, XCircle, Filter, MessageSquare } from 'lucide-react';
+import { Star, Search, Trash2, CheckCircle, Filter, MessageSquare } from 'lucide-react';
 
 interface Review { id: string; rating: number; comment: string; is_verified: boolean; created_at: string; }
 

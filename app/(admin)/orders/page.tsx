@@ -12,9 +12,9 @@ export default function OrdersPage() {
     const [search, setSearch] = useState('');
     const [filter, setFilter] = useState('all');
 
-    useEffect(() => { fetchOrders(); }, []);
-
     const fetchOrders = async () => { const data = await getOrders(); setOrders(data); setLoading(false); };
+
+    useEffect(() => { fetchOrders(); }, []);
 
     const handleStatusChange = async (id: string, status: string) => {
         await updateOrderStatus(id, status);
@@ -108,8 +108,8 @@ export default function OrdersPage() {
                                         <td style={{ color: '#9ca3af', textTransform: 'uppercase', fontSize: 12 }}>{order.payment_method || 'COD'}</td>
                                         <td>
                                             <span className={`badge ${order.status === 'delivered' ? 'badge-success' :
-                                                    order.status === 'shipped' ? 'badge-info' :
-                                                        order.status === 'pending' ? 'badge-warning' : 'badge-error'
+                                                order.status === 'shipped' ? 'badge-info' :
+                                                    order.status === 'pending' ? 'badge-warning' : 'badge-error'
                                                 }`} style={{ textTransform: 'capitalize' }}>{order.status}</span>
                                         </td>
                                         <td>

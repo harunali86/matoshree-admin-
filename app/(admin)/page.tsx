@@ -9,13 +9,13 @@ export default function Dashboard() {
   const [stats, setStats] = useState({ totalProducts: 0, totalOrders: 0, totalRevenue: 0, pendingOrders: 0, recentOrders: [] as any[] });
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => { loadStats(); }, []);
-
   const loadStats = async () => {
     const data = await getDashboardStats();
     setStats(data);
     setLoading(false);
   };
+
+  useEffect(() => { loadStats(); }, []);
 
   const formatCurrency = (n: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n);
 
@@ -29,7 +29,7 @@ export default function Dashboard() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Welcome back! 👋</h1>
-          <p className="page-subtitle">Here's what's happening with your store today.</p>
+          <p className="page-subtitle">Here&apos;s what&apos;s happening with your store today.</p>
         </div>
         <Link href="/products/new" className="btn btn-primary"><Plus size={18} /> Add Product</Link>
       </div>
