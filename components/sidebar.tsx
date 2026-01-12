@@ -6,7 +6,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { logout as logoutAction } from '@/lib/auth';
 import {
     LayoutDashboard, Package, FolderOpen, Tag, Palette, Image, ShoppingCart, Users,
-    Ticket, Star, FileText, BarChart3, Settings, Menu, X, LogOut
+    Ticket, Star, FileText, BarChart3, Settings, Menu, X, LogOut, Bell
 } from 'lucide-react';
 
 const menuItems = [
@@ -22,6 +22,7 @@ const menuItems = [
     { icon: Ticket, label: 'Coupons', href: '/coupons' },
     { icon: Star, label: 'Reviews', href: '/reviews' },
     { icon: FileText, label: 'Blogs', href: '/blogs' },
+    { icon: Bell, label: 'Notifications', href: '/notifications' },
     { icon: BarChart3, label: 'Reports', href: '/reports' },
     { icon: Settings, label: 'Settings', href: '/settings' },
 ];

@@ -119,6 +119,10 @@ export async function getOrders() {
 }
 
 export async function updateOrderStatus(id: string, status: string) {
+    if (status === 'Cancelled') {
+        const { error } = await supabase.rpc('cancel_order', { p_order_id: id });
+        return { success: !error, error: error?.message };
+    }
     const { error } = await supabase.from('orders').update({ status }).eq('id', id);
     return { success: !error, error: error?.message };
 }
@@ -273,4 +277,46 @@ export async function getDashboardStats() {
 export async function getCustomers() {
     const { data } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
     return data || [];
+}
+
+// Notifications
+export async function sendNotificationToAll(title: string, body: string) {
+    const { data: profiles } = await supabase.from('profiles').select('push_token').not('push_token', 'is', null);
+
+    if (!profiles || profiles.length === 0) {
+        return { success: false, error: 'No devices registered for notifications' };
+    }
+
+    // Filter unique valid tokens
+    const tokens = Array.from(new Set(profiles.map(p => p.push_token).filter(t => t && t.startsWith('ExponentPushToken'))));
+
+    if (tokens.length === 0) return { success: false, error: 'No valid tokens found' };
+
+    const messages = tokens.map(token => ({
+        to: token,
+        sound: 'default',
+        title,
+        body,
+        data: { url: '/(tabs)/' }, // Deep link to home
+    }));
+
+    try {
+        const response = await fetch('https://exp.host/--/api/v2/push/send', {
+            method: 'POST',
+            headers: {
+                'Accept': 'application/json',
+                'Accept-encoding': 'gzip, deflate',
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(messages),
+        });
+
+        // Save notification to history (optional, assuming 'notifications' table exists or we skip)
+        // await supabase.from('notifications').insert({ title, body, sent_count: tokens.length });
+
+        return { success: true, count: tokens.length };
+    } catch (e: any) {
+        console.error('Push Error:', e);
+        return { success: false, error: e.message };
+    }
 }
