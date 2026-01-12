@@ -35,33 +35,34 @@ export default function EditProductPage() {
         category_id: '', brand_id: '', is_active: true, is_new_arrival: false, is_bestseller: false,
     });
 
-    useEffect(() => { loadData(); }, [productId]);
+    useEffect(() => {
+        const loadData = async () => {
+            const [products, cats, brnds] = await Promise.all([getProducts(), getCategories(), getBrands()]);
+            setCategories(cats);
+            setBrands(brnds);
 
-    const loadData = async () => {
-        const [products, cats, brnds] = await Promise.all([getProducts(), getCategories(), getBrands()]);
-        setCategories(cats);
-        setBrands(brnds);
-
-        const product = products.find((p: any) => p.id === productId);
-        if (product) {
-            setForm({
-                name: product.name || '',
-                description: product.description || '',
-                price: product.price?.toString() || '',
-                sale_price: product.sale_price?.toString() || '',
-                stock: product.stock?.toString() || '',
-                images: product.images || [],
-                colors: product.colors || [],
-                sizes: product.sizes || [],
-                category_id: product.category_id || '',
-                brand_id: product.brand_id || '',
-                is_active: product.is_active ?? true,
-                is_new_arrival: product.is_new_arrival ?? false,
-                is_bestseller: product.is_bestseller ?? false,
-            });
-        }
-        setLoading(false);
-    };
+            const product = products.find((p: any) => p.id === productId);
+            if (product) {
+                setForm({
+                    name: product.name || '',
+                    description: product.description || '',
+                    price: product.price?.toString() || '',
+                    sale_price: product.sale_price?.toString() || '',
+                    stock: product.stock?.toString() || '',
+                    images: product.images || [],
+                    colors: product.colors || [],
+                    sizes: product.sizes || [],
+                    category_id: product.category_id || '',
+                    brand_id: product.brand_id || '',
+                    is_active: product.is_active ?? true,
+                    is_new_arrival: product.is_new_arrival ?? false,
+                    is_bestseller: product.is_bestseller ?? false,
+                });
+            }
+            setLoading(false);
+        };
+        loadData();
+    }, [productId]);
 
     // Server-side image upload
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -167,6 +168,7 @@ export default function EditProductPage() {
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
                                     {form.images.map((img, i) => (
                                         <div key={i} style={{ position: 'relative', aspectRatio: '1', background: '#1f2937', borderRadius: 8, overflow: 'hidden' }}>
+                                            {/* eslint-disable-next-line @next/next/no-img-element */}
                                             <img src={img} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                                             <button type="button" onClick={() => setForm({ ...form, images: form.images.filter((_, idx) => idx !== i) })} style={{ position: 'absolute', top: 4, right: 4, padding: 4, background: '#ef4444', border: 'none', borderRadius: 4, cursor: 'pointer' }}>
                                                 <X size={12} style={{ color: 'white' }} />

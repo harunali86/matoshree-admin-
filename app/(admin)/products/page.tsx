@@ -22,14 +22,14 @@ export default function ProductsPage() {
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
 
-    useEffect(() => { fetchProducts(); }, []);
-
     const fetchProducts = async () => {
         setLoading(true);
         const data = await getProducts();
         setProducts(data);
         setLoading(false);
     };
+
+    useEffect(() => { fetchProducts(); }, []);
 
     const toggleActive = async (id: string, current: boolean) => {
         await updateProduct(id, { is_active: !current });
@@ -108,6 +108,7 @@ export default function ProductsPage() {
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                                                     <div className="product-thumb">
                                                         {p.thumbnail ? (
+                                                            // eslint-disable-next-line @next/next/no-img-element
                                                             <img src={p.thumbnail} alt={p.name} />
                                                         ) : (
                                                             <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

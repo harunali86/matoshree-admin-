@@ -11,9 +11,14 @@ export default function ReviewsPage() {
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
 
-    useEffect(() => { fetchReviews(); }, []);
-
-    const fetchReviews = async () => { const data = await getReviews(); setReviews(data); setLoading(false); };
+    useEffect(() => {
+        const fetchReviews = async () => {
+            const data = await getReviews();
+            setReviews(data);
+            setLoading(false);
+        };
+        fetchReviews();
+    }, []);
 
     const toggleVerified = async (id: string, current: boolean) => {
         await updateReviewVerified(id, !current);

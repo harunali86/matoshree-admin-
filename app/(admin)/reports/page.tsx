@@ -9,9 +9,14 @@ export default function ReportsPage() {
     const [loading, setLoading] = useState(true);
     const [period, setPeriod] = useState('month');
 
-    useEffect(() => { loadStats(); }, []);
-
-    const loadStats = async () => { const data = await getDashboardStats(); setStats(data); setLoading(false); };
+    useEffect(() => {
+        const loadStats = async () => {
+            const data = await getDashboardStats();
+            setStats(data);
+            setLoading(false);
+        };
+        loadStats();
+    }, []);
 
     const formatCurrency = (n: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n);
 

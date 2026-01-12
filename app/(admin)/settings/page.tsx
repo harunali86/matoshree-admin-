@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { getSettings, saveSettings } from '@/lib/actions';
-import { Save, Store, Phone, Mail, Clock, Instagram, Facebook, MessageCircle } from 'lucide-react';
+import { Save, Store, Phone, Clock, Instagram } from 'lucide-react';
 
 export default function SettingsPage() {
     const [loading, setLoading] = useState(true);
@@ -16,32 +16,33 @@ export default function SettingsPage() {
         privacy_policy: '', terms: '', about: '',
     });
 
-    useEffect(() => { loadSettings(); }, []);
-
-    const loadSettings = async () => {
-        const data = await getSettings();
-        if (data) {
-            setSettings({
-                store_name: data.store?.name || 'Matoshree Footwear',
-                tagline: data.store?.tagline || '',
-                gst_number: data.store?.gst_number || '',
-                store_timing: data.store?.timing || '',
-                phone: data.store?.phone || '',
-                whatsapp: data.store?.whatsapp || '',
-                email: data.store?.email || '',
-                address: data.store?.address || '',
-                instagram: data.store?.instagram || '',
-                facebook: data.store?.facebook || '',
-                min_order: data.shipping?.min_order?.toString() || '',
-                delivery_charge: data.shipping?.delivery_charge?.toString() || '',
-                free_delivery_above: data.shipping?.free_delivery_above?.toString() || '',
-                privacy_policy: data.pages?.privacy_policy || '',
-                terms: data.pages?.terms || '',
-                about: data.pages?.about || '',
-            });
-        }
-        setLoading(false);
-    };
+    useEffect(() => {
+        const loadSettings = async () => {
+            const data = await getSettings();
+            if (data) {
+                setSettings({
+                    store_name: data.store?.name || 'Matoshree Footwear',
+                    tagline: data.store?.tagline || '',
+                    gst_number: data.store?.gst_number || '',
+                    store_timing: data.store?.timing || '',
+                    phone: data.store?.phone || '',
+                    whatsapp: data.store?.whatsapp || '',
+                    email: data.store?.email || '',
+                    address: data.store?.address || '',
+                    instagram: data.store?.instagram || '',
+                    facebook: data.store?.facebook || '',
+                    min_order: data.shipping?.min_order?.toString() || '',
+                    delivery_charge: data.shipping?.delivery_charge?.toString() || '',
+                    free_delivery_above: data.shipping?.free_delivery_above?.toString() || '',
+                    privacy_policy: data.pages?.privacy_policy || '',
+                    terms: data.pages?.terms || '',
+                    about: data.pages?.about || '',
+                });
+            }
+            setLoading(false);
+        };
+        loadSettings();
+    }, []);
 
     const handleSave = async () => {
         setSaving(true);
