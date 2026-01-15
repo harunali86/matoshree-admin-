@@ -2,9 +2,18 @@
 
 import { useEffect, useState } from 'react';
 import { getOrders, updateOrderStatus } from '@/lib/actions';
+import Link from 'next/link';
 import { Search, Download, Package, Clock, Truck, CheckCircle } from 'lucide-react';
 
-interface Order { id: string; created_at: string; total_amount: number; status: string; payment_method: string; }
+interface Order {
+    id: string;
+    invoice_number?: string;
+    created_at: string;
+    total_amount: number;
+    status: string;
+    payment_method: string;
+    items?: { quantity: number; size: number | string; product?: { name: string } }[];
+}
 
 export default function OrdersPage() {
     const [orders, setOrders] = useState<Order[]>([]);
@@ -93,6 +102,7 @@ export default function OrdersPage() {
                                 <tr>
                                     <th>Order ID</th>
                                     <th>Date</th>
+                                    <th>Items</th>
                                     <th>Amount</th>
                                     <th>Payment</th>
                                     <th>Status</th>
@@ -102,8 +112,26 @@ export default function OrdersPage() {
                             <tbody>
                                 {filtered.map((order) => (
                                     <tr key={order.id}>
-                                        <td><span style={{ fontFamily: 'monospace', color: 'white' }}>#{order.id.slice(0, 8)}</span></td>
+                                        <td>
+                                            <Link href={`/orders/${order.id}`} style={{ textDecoration: 'none' }}>
+                                                <span style={{ fontFamily: 'monospace', color: '#60a5fa', fontWeight: 'bold', cursor: 'pointer' }}>
+                                                    #{order.invoice_number || order.id.slice(0, 8)}
+                                                </span>
+                                            </Link>
+                                        </td>
                                         <td style={{ color: '#9ca3af' }}>{formatDate(order.created_at)}</td>
+                                        <td style={{ color: '#d1d5db', fontSize: 13, maxWidth: 250 }}>
+                                            {order.items && order.items.length > 0 ? (
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                                    {order.items.slice(0, 2).map((item, i) => (
+                                                        <span key={i}>
+                                                            {item.quantity}x {item.product?.name || 'Item'} <span style={{ color: '#6b7280' }}>({item.size})</span>
+                                                        </span>
+                                                    ))}
+                                                    {order.items.length > 2 && <span style={{ color: '#6b7280', fontSize: 11 }}>+{order.items.length - 2} more...</span>}
+                                                </div>
+                                            ) : <span style={{ color: '#6b7280' }}>-</span>}
+                                        </td>
                                         <td style={{ fontWeight: 600, color: 'white' }}>{formatPrice(order.total_amount || 0)}</td>
                                         <td style={{ color: '#9ca3af', textTransform: 'uppercase', fontSize: 12 }}>{order.payment_method || 'COD'}</td>
                                         <td>

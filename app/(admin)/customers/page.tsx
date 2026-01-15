@@ -86,22 +86,63 @@ export default function CustomersPage() {
                             <thead>
                                 <tr>
                                     <th>Customer</th>
-                                    <th>Email</th>
+                                    <th>Role</th>
+                                    <th>Business Details</th>
+                                    <th>Status</th>
                                     <th>Member Since</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {filtered.map((c) => (
+                                {filtered.map((c: any) => (
                                     <tr key={c.id}>
                                         <td>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                                                 <div style={{ width: 40, height: 40, background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 600 }}>
                                                     {(c.full_name || c.email)?.[0]?.toUpperCase() || 'U'}
                                                 </div>
-                                                <span style={{ fontWeight: 500, color: 'white' }}>{c.full_name || 'Unknown'}</span>
+                                                <div>
+                                                    <div style={{ fontWeight: 500, color: 'white' }}>{c.full_name || 'Unknown'}</div>
+                                                    <div style={{ fontSize: 12, color: '#9ca3af' }}>{c.email}</div>
+                                                </div>
                                             </div>
                                         </td>
-                                        <td style={{ color: '#9ca3af' }}>{c.email}</td>
+                                        <td>
+                                            <span style={{
+                                                padding: '4px 10px', borderRadius: 20, fontSize: 12, fontWeight: 500,
+                                                background: c.role === 'wholesale' ? 'rgba(139, 92, 246, 0.2)' : 'rgba(59, 130, 246, 0.2)',
+                                                color: c.role === 'wholesale' ? '#a78bfa' : '#60a5fa',
+                                                border: `1px solid ${c.role === 'wholesale' ? 'rgba(139, 92, 246, 0.4)' : 'rgba(59, 130, 246, 0.4)'}`
+                                            }}>
+                                                {c.role === 'wholesale' ? 'Wholesale (B2B)' : 'Retail'}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            {c.role === 'wholesale' ? (
+                                                <div>
+                                                    <div style={{ color: 'white', fontSize: 13 }}>{c.business_name || '-'}</div>
+                                                    <div style={{ color: '#9ca3af', fontSize: 12 }}>GST: {c.gst_number || '-'}</div>
+                                                </div>
+                                            ) : <span style={{ color: '#6b7280' }}>-</span>}
+                                        </td>
+                                        <td>
+                                            {c.role === 'wholesale' ? (
+                                                <button
+                                                    onClick={async () => {
+                                                        if (!confirm('Change verification status?')) return;
+                                                        await import('@/lib/actions').then(m => m.updateProfile(c.id, { is_verified: !c.is_verified }));
+                                                        fetchCustomers();
+                                                    }}
+                                                    style={{
+                                                        cursor: 'pointer', padding: '6px 12px', borderRadius: 6, fontSize: 12, fontWeight: 500,
+                                                        background: c.is_verified ? 'rgba(34, 197, 94, 0.2)' : 'rgba(239, 68, 68, 0.2)',
+                                                        color: c.is_verified ? '#4ade80' : '#f87171',
+                                                        border: `1px solid ${c.is_verified ? 'rgba(34, 197, 94, 0.4)' : 'rgba(239, 68, 68, 0.4)'}`
+                                                    }}
+                                                >
+                                                    {c.is_verified ? 'Verified' : 'Pending Approval'}
+                                                </button>
+                                            ) : <span style={{ color: '#9ca3af', fontSize: 12 }}>Auto-Verified</span>}
+                                        </td>
                                         <td style={{ color: '#9ca3af' }}>{formatDate(c.created_at)}</td>
                                     </tr>
                                 ))}

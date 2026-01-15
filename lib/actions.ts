@@ -114,7 +114,17 @@ export async function deleteBrand(id: string) {
 
 // Orders
 export async function getOrders() {
-    const { data } = await supabase.from('orders').select('*').order('created_at', { ascending: false });
+    const { data } = await supabase
+        .from('orders')
+        .select(`
+            *,
+            items:order_items (
+                quantity,
+                size,
+                product:products (name)
+            )
+        `)
+        .order('created_at', { ascending: false });
     return data || [];
 }
 
@@ -277,6 +287,11 @@ export async function getDashboardStats() {
 export async function getCustomers() {
     const { data } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
     return data || [];
+}
+
+export async function updateProfile(id: string, updates: any) {
+    const { error } = await supabase.from('profiles').update(updates).eq('id', id);
+    return { success: !error, error: error?.message };
 }
 
 // Notifications

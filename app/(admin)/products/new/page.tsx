@@ -29,6 +29,7 @@ export default function NewProductPage() {
         name: '', description: '', price: '', sale_price: '', stock: '50',
         images: [] as string[], colors: [] as string[], sizes: [] as string[],
         category_id: '', brand_id: '', is_active: true, is_new_arrival: false, is_bestseller: false,
+        price_wholesale: '', moq: '',
     });
 
     useEffect(() => {
@@ -94,6 +95,8 @@ export default function NewProductPage() {
             is_new_arrival: form.is_new_arrival,
             is_bestseller: form.is_bestseller,
             is_on_sale: !!form.sale_price,
+            price_wholesale: (form as any).price_wholesale ? parseFloat((form as any).price_wholesale) : null,
+            moq: (form as any).moq ? parseInt((form as any).moq) : 1,
         });
 
         if (result.success) {
@@ -205,8 +208,15 @@ export default function NewProductPage() {
                                     <input type="number" value={form.sale_price} onChange={(e) => setForm({ ...form, sale_price: e.target.value })} placeholder="7999" />
                                 </div>
                                 <div>
-                                    <label style={{ display: 'block', fontSize: 13, color: '#9ca3af', marginBottom: 6 }}>Stock</label>
                                     <input type="number" value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} />
+                                </div>
+                                <div style={{ borderTop: '1px solid #374151', paddingTop: 12, marginTop: 6 }}>
+                                    <label style={{ display: 'block', fontSize: 13, color: '#60a5fa', marginBottom: 6 }}>Wholesale Price (B2B)</label>
+                                    <input type="number" value={(form as any).price_wholesale || ''} onChange={(e) => setForm({ ...form, price_wholesale: e.target.value } as any)} placeholder="B2B Price" style={{ borderColor: 'rgba(59,130,246,0.3)' }} />
+                                </div>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: 13, color: '#60a5fa', marginBottom: 6 }}>MOQ (Minimum Order Qty)</label>
+                                    <input type="number" value={(form as any).moq || ''} onChange={(e) => setForm({ ...form, moq: e.target.value } as any)} placeholder="Default: 1" style={{ borderColor: 'rgba(59,130,246,0.3)' }} />
                                 </div>
                             </div>
                         </div>
