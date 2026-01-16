@@ -3,10 +3,11 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
+import { useAdminMode } from '@/components/providers/AdminModeProvider';
 import { logout as logoutAction } from '@/lib/auth';
 import {
     LayoutDashboard, Package, FolderOpen, Tag, Palette, Image, ShoppingCart, Users,
-    Ticket, Star, FileText, BarChart3, Settings, Menu, X, LogOut, Bell
+    Ticket, Star, FileText, BarChart3, Settings, Menu, X, LogOut, Bell, RefreshCcw
 } from 'lucide-react';
 
 const menuItems = [
@@ -18,7 +19,8 @@ const menuItems = [
     { icon: Image, label: 'Banners', href: '/banners' },
     { icon: LayoutDashboard, label: 'Hero Slides', href: '/hero' },
     { icon: ShoppingCart, label: 'Orders', href: '/orders' },
-    { icon: Users, label: 'Customers', href: '/customers' },
+    { icon: RefreshCcw, label: 'Returns', href: '/returns' },
+    { icon: Users, label: 'Customers', href: '/customers?tab=retail' },
     { icon: Ticket, label: 'Coupons', href: '/coupons' },
     { icon: Star, label: 'Reviews', href: '/reviews' },
     { icon: FileText, label: 'Blogs', href: '/blogs' },
@@ -28,6 +30,7 @@ const menuItems = [
 ];
 
 export function Sidebar() {
+    const { isWholesale } = useAdminMode();
     const pathname = usePathname();
     const [isOpen, setIsOpen] = useState(false);
     const [isDesktop, setIsDesktop] = useState(false);
@@ -123,25 +126,89 @@ export function Sidebar() {
 
                 {/* Navigation */}
                 <nav style={{ flex: 1, overflowY: 'auto', padding: '16px 12px' }}>
-                    <p style={{ padding: '0 12px', marginBottom: 12, fontSize: 11, fontWeight: 600, color: '#475569', textTransform: 'uppercase', letterSpacing: 1 }}>Menu</p>
+
+                    {!isWholesale && (
+                        <>
+                            <p style={{ padding: '0 12px', marginBottom: 12, fontSize: 11, fontWeight: 600, color: '#475569', textTransform: 'uppercase', letterSpacing: 1 }}>Retail Management</p>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 24 }}>
+                                {menuItems.filter(i => !['Quotations', 'Dealers', 'Price Tiers'].includes(i.label)).map((item) => {
+                                    const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
+                                    return (
+                                        <Link
+                                            key={item.href}
+                                            href={item.href}
+                                            onClick={() => setIsOpen(false)}
+                                            style={{
+                                                display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px', borderRadius: 12, fontSize: 14, fontWeight: 500, textDecoration: 'none',
+                                                background: isActive ? '#3b82f6' : 'transparent',
+                                                color: isActive ? 'white' : '#94a3b8',
+                                                transition: 'all 0.2s',
+                                            }}
+                                        >
+                                            <item.icon size={18} />
+                                            <span>{item.label}</span>
+                                        </Link>
+                                    );
+                                })}
+                            </div>
+                        </>
+                    )}
+
+                    {isWholesale && (
+                        <>
+                            <p style={{ padding: '0 12px', marginBottom: 12, fontSize: 11, fontWeight: 600, color: '#6366f1', textTransform: 'uppercase', letterSpacing: 1 }}>Wholesale Operations</p>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 24 }}>
+                                {[
+                                    { icon: LayoutDashboard, label: 'Dashboard', href: '/' },
+                                    { icon: Users, label: 'Wholesale Applications', href: '/customers?tab=pending', isSpecial: true },
+                                    { icon: FileText, label: 'Quotations', href: '/quotations' },
+                                    { icon: Users, label: 'Dealers List', href: '/customers?tab=wholesale' },
+                                    { icon: Package, label: 'Bulk Inventory', href: '/products' },
+                                    { icon: ShoppingCart, label: 'Purchase Orders', href: '/orders' },
+                                    { icon: Tag, label: 'Price Tiers', href: '/price-tiers' },
+                                ].map((item) => {
+                                    const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
+                                    return (
+                                        <Link
+                                            key={item.label}
+                                            href={item.href}
+                                            onClick={() => setIsOpen(false)}
+                                            style={{
+                                                display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px', borderRadius: 12, fontSize: 14, fontWeight: 500, textDecoration: 'none',
+                                                background: isActive ? '#4f46e5' : (item.isSpecial ? 'rgba(99, 102, 241, 0.05)' : 'transparent'),
+                                                color: isActive ? 'white' : (item.isSpecial ? '#818cf8' : '#94a3b8'),
+                                                border: item.isSpecial && !isActive ? '1px dashed rgba(99, 102, 241, 0.3)' : '1px solid transparent',
+                                                transition: 'all 0.2s',
+                                            }}
+                                        >
+                                            <item.icon size={18} />
+                                            <span style={{ flex: 1 }}>{item.label}</span>
+                                            {item.isSpecial && (
+                                                <div style={{ background: '#f59e0b', color: 'black', fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 8 }}>NEW</div>
+                                            )}
+                                        </Link>
+                                    );
+                                })}
+                            </div>
+                        </>
+                    )}
+
+                    <p style={{ padding: '0 12px', marginBottom: 12, fontSize: 11, fontWeight: 600, color: '#475569', textTransform: 'uppercase', letterSpacing: 1 }}>System</p>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                        {menuItems.map((item) => {
-                            const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
+                        {[
+                            { icon: Image, label: 'App CMS', href: '/app-cms' },
+                            { icon: BarChart3, label: 'Reports', href: '/reports' },
+                            { icon: Settings, label: 'Settings', href: '/settings' },
+                        ].map((item) => {
+                            const isActive = pathname === item.href;
                             return (
                                 <Link
                                     key={item.href}
                                     href={item.href}
                                     onClick={() => setIsOpen(false)}
                                     style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: 12,
-                                        padding: '10px 16px',
-                                        borderRadius: 12,
-                                        fontSize: 14,
-                                        fontWeight: 500,
-                                        textDecoration: 'none',
-                                        background: isActive ? '#3b82f6' : 'transparent',
+                                        display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px', borderRadius: 12, fontSize: 14, fontWeight: 500, textDecoration: 'none',
+                                        background: isActive ? '#334155' : 'transparent',
                                         color: isActive ? 'white' : '#94a3b8',
                                         transition: 'all 0.2s',
                                     }}

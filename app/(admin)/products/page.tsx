@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { getProducts, updateProduct, deleteProduct } from '@/lib/actions';
-import { Plus, Search, Pencil, Trash2, Package, RefreshCw, Eye } from 'lucide-react';
+import { Plus, Search, Pencil, Trash2, Package, RefreshCw, Eye, AlertTriangle } from 'lucide-react';
 import Link from 'next/link';
 
 interface Product {
@@ -103,7 +103,7 @@ export default function ProductsPage() {
                                 </thead>
                                 <tbody>
                                     {filtered.map((p) => (
-                                        <tr key={p.id}>
+                                        <tr key={p.id} className={p.stock < 10 ? 'bg-red-500/5 hover:bg-red-500/10' : ''}>
                                             <td>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                                                     <div className="product-thumb">
@@ -130,9 +130,16 @@ export default function ProductsPage() {
                                                 {p.sale_price && <p style={{ color: '#34d399', fontSize: 13 }}>{formatPrice(p.sale_price)}</p>}
                                             </td>
                                             <td>
-                                                <span className={`badge ${p.stock > 10 ? 'badge-success' : p.stock > 0 ? 'badge-warning' : 'badge-error'}`}>
-                                                    {p.stock} in stock
-                                                </span>
+                                                {p.stock < 10 ? (
+                                                    <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-red-500/20 w-fit">
+                                                        <AlertTriangle size={12} className="text-red-500" />
+                                                        <span className="text-xs font-bold text-red-500">{p.stock} LOW STOCK</span>
+                                                    </div>
+                                                ) : (
+                                                    <span className={`badge ${p.stock > 10 ? 'badge-success' : 'badge-warning'}`}>
+                                                        {p.stock} in stock
+                                                    </span>
+                                                )}
                                             </td>
                                             <td>
                                                 <button onClick={() => toggleActive(p.id, p.is_active)} className={`badge ${p.is_active ? 'badge-success' : 'badge-error'}`} style={{ cursor: 'pointer', border: 'none' }}>

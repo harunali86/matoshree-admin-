@@ -1,13 +1,15 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { getSettings, saveSettings } from '@/lib/actions';
-import { Save, Store, Phone, Clock, Instagram } from 'lucide-react';
+import { getSettings, saveSettings, getAppConfig, updateAppConfig } from '@/lib/actions';
+import { Save, Store, Phone, Clock, Instagram, Smartphone, Bell, Power, AlertTriangle, Send } from 'lucide-react';
 
 export default function SettingsPage() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [activeTab, setActiveTab] = useState('store');
+
+    // Store Settings
     const [settings, setSettings] = useState({
         store_name: '', tagline: '', gst_number: '', store_timing: '',
         phone: '', whatsapp: '', email: '', address: '',
@@ -16,28 +18,47 @@ export default function SettingsPage() {
         privacy_policy: '', terms: '', about: '',
     });
 
+    // System Settings
+    const [systemSettings, setSystemSettings] = useState({
+        maintenance_mode: false,
+        min_app_version: '1.0.0',
+        enable_cod: true,
+        enable_b2b_credit: false
+    });
+
+    // Notification State
+    const [notif, setNotif] = useState({ title: '', body: '', target: 'all' });
+
     useEffect(() => {
         const loadSettings = async () => {
-            const data = await getSettings();
-            if (data) {
+            const [storeData, systemData] = await Promise.all([
+                getSettings(),
+                getAppConfig('system_settings')
+            ]);
+
+            if (storeData) {
                 setSettings({
-                    store_name: data.store?.name || 'Matoshree Footwear',
-                    tagline: data.store?.tagline || '',
-                    gst_number: data.store?.gst_number || '',
-                    store_timing: data.store?.timing || '',
-                    phone: data.store?.phone || '',
-                    whatsapp: data.store?.whatsapp || '',
-                    email: data.store?.email || '',
-                    address: data.store?.address || '',
-                    instagram: data.store?.instagram || '',
-                    facebook: data.store?.facebook || '',
-                    min_order: data.shipping?.min_order?.toString() || '',
-                    delivery_charge: data.shipping?.delivery_charge?.toString() || '',
-                    free_delivery_above: data.shipping?.free_delivery_above?.toString() || '',
-                    privacy_policy: data.pages?.privacy_policy || '',
-                    terms: data.pages?.terms || '',
-                    about: data.pages?.about || '',
+                    store_name: storeData.store?.name || 'Matoshree Footwear',
+                    tagline: storeData.store?.tagline || '',
+                    gst_number: storeData.store?.gst_number || '',
+                    store_timing: storeData.store?.timing || '',
+                    phone: storeData.store?.phone || '',
+                    whatsapp: storeData.store?.whatsapp || '',
+                    email: storeData.store?.email || '',
+                    address: storeData.store?.address || '',
+                    instagram: storeData.store?.instagram || '',
+                    facebook: storeData.store?.facebook || '',
+                    min_order: storeData.shipping?.min_order?.toString() || '',
+                    delivery_charge: storeData.shipping?.delivery_charge?.toString() || '',
+                    free_delivery_above: storeData.shipping?.free_delivery_above?.toString() || '',
+                    privacy_policy: storeData.pages?.privacy_policy || '',
+                    terms: storeData.pages?.terms || '',
+                    about: storeData.pages?.about || '',
                 });
+            }
+
+            if (systemData) {
+                setSystemSettings(systemData);
             }
             setLoading(false);
         };
@@ -46,13 +67,23 @@ export default function SettingsPage() {
 
     const handleSave = async () => {
         setSaving(true);
+        // Save Store Settings
         await saveSettings({
             store: { name: settings.store_name, tagline: settings.tagline, gst_number: settings.gst_number, timing: settings.store_timing, phone: settings.phone, whatsapp: settings.whatsapp, email: settings.email, address: settings.address, instagram: settings.instagram, facebook: settings.facebook },
             shipping: { min_order: parseFloat(settings.min_order) || 0, delivery_charge: parseFloat(settings.delivery_charge) || 0, free_delivery_above: parseFloat(settings.free_delivery_above) || 0 },
             pages: { privacy_policy: settings.privacy_policy, terms: settings.terms, about: settings.about },
         });
+
+        // Save System Settings
+        await updateAppConfig('system_settings', systemSettings);
+
         setSaving(false);
-        alert('Settings saved!');
+        alert('All settings saved successfully!');
+    };
+
+    const sendNotification = () => {
+        alert(`Sending "${notif.title}" to ${notif.target.toUpperCase()} users... (Simulation)`);
+        setNotif({ title: '', body: '', target: 'all' });
     };
 
     const tabs = [
@@ -60,6 +91,8 @@ export default function SettingsPage() {
         { id: 'contact', label: 'Contact', icon: Phone },
         { id: 'social', label: 'Social', icon: Instagram },
         { id: 'shipping', label: 'Shipping', icon: Clock },
+        { id: 'system', label: 'App Control', icon: Smartphone },
+        { id: 'notifications', label: 'Push Notif.', icon: Bell },
     ];
 
     if (loading) return <div style={{ display: 'flex', justifyContent: 'center', padding: 100 }}><div className="loader"></div></div>;
@@ -68,8 +101,8 @@ export default function SettingsPage() {
         <div className="page animate-fadeIn">
             <div className="page-header">
                 <div>
-                    <h1 className="page-title">Settings</h1>
-                    <p className="page-subtitle">Manage your store configuration</p>
+                    <h1 className="page-title">Settings & Control</h1>
+                    <p className="page-subtitle">Manage store config and global app controls</p>
                 </div>
                 <button onClick={handleSave} className="btn btn-primary" disabled={saving}><Save size={18} /> {saving ? 'Saving...' : 'Save Changes'}</button>
             </div>
@@ -130,6 +163,106 @@ export default function SettingsPage() {
                                     <div><label style={{ display: 'block', fontSize: 13, color: '#9ca3af', marginBottom: 6 }}>Free Above (₹)</label><input type="number" value={settings.free_delivery_above} onChange={(e) => setSettings({ ...settings, free_delivery_above: e.target.value })} placeholder="1000" /></div>
                                 </div>
                             </>
+                        )}
+
+                        {activeTab === 'system' && (
+                            <div className="space-y-6">
+                                <div className="p-4 border border-red-500/30 bg-red-500/10 rounded-lg">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-3">
+                                            <AlertTriangle className="text-red-400" size={24} />
+                                            <div>
+                                                <h4 className="text-white font-medium">Maintenance Mode</h4>
+                                                <p className="text-sm text-red-200/70">Instantly lock the app for all users</p>
+                                            </div>
+                                        </div>
+                                        <label className="relative inline-flex items-center cursor-pointer">
+                                            <input type="checkbox" checked={systemSettings.maintenance_mode} onChange={(e) => setSystemSettings({ ...systemSettings, maintenance_mode: e.target.checked })} className="sr-only peer" />
+                                            <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-500"></div>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-6">
+                                    <div className="card border border-slate-700 p-4">
+                                        <h4 className="text-white font-medium mb-4 flex items-center gap-2"><Smartphone size={18} /> App Version</h4>
+                                        <div className="space-y-2">
+                                            <label className="text-xs text-slate-400">Min. Required Version</label>
+                                            <input
+                                                value={systemSettings.min_app_version}
+                                                onChange={(e) => setSystemSettings({ ...systemSettings, min_app_version: e.target.value })}
+                                                className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white"
+                                            />
+                                            <p className="text-xs text-slate-500">Force users to update if below this version</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="card border border-slate-700 p-4">
+                                        <h4 className="text-white font-medium mb-4 flex items-center gap-2"><Power size={18} /> Feature Toggles</h4>
+                                        <div className="space-y-4">
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-sm text-slate-300">Enable Cash on Delivery</span>
+                                                <input type="checkbox" checked={systemSettings.enable_cod} onChange={(e) => setSystemSettings({ ...systemSettings, enable_cod: e.target.checked })} className="w-4 h-4 rounded" />
+                                            </div>
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-sm text-slate-300">Enable B2B Credit Limits</span>
+                                                <input type="checkbox" checked={systemSettings.enable_b2b_credit} onChange={(e) => setSystemSettings({ ...systemSettings, enable_b2b_credit: e.target.checked })} className="w-4 h-4 rounded" />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'notifications' && (
+                            <div className="space-y-6">
+                                <div className="card border border-slate-700 p-6 bg-slate-800/30">
+                                    <h3 className="text-lg font-semibold text-white mb-6 flex items-center gap-2">
+                                        <Send size={20} className="text-blue-400" /> Send Push Notification
+                                    </h3>
+
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label className="block text-sm text-slate-400 mb-1">Title</label>
+                                            <input
+                                                value={notif.title}
+                                                onChange={(e) => setNotif({ ...notif, title: e.target.value })}
+                                                className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white"
+                                                placeholder="e.g. Mega Sale - 50% Off!"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm text-slate-400 mb-1">Message Body</label>
+                                            <textarea
+                                                value={notif.body}
+                                                onChange={(e) => setNotif({ ...notif, body: e.target.value })}
+                                                className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white h-24"
+                                                placeholder="Enter notification content..."
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm text-slate-400 mb-1">Target Audience</label>
+                                            <select
+                                                value={notif.target}
+                                                onChange={(e) => setNotif({ ...notif, target: e.target.value })}
+                                                className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white"
+                                            >
+                                                <option value="all">All Users</option>
+                                                <option value="retail">Retail Customers</option>
+                                                <option value="wholesale">Wholesale Dealers</option>
+                                            </select>
+                                        </div>
+
+                                        <button
+                                            onClick={sendNotification}
+                                            disabled={!notif.title || !notif.body}
+                                            className="btn btn-primary w-full flex justify-center items-center gap-2 mt-4"
+                                        >
+                                            <Send size={18} /> Send Blast
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
                         )}
                     </div>
                 </div>

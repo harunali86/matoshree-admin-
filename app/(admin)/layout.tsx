@@ -2,6 +2,7 @@ import { Sidebar } from '@/components/sidebar';
 import { Header } from '@/components/header';
 import { checkAuth } from '@/lib/auth';
 import { redirect } from 'next/navigation';
+import { AdminModeProvider } from '@/components/providers/AdminModeProvider';
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
     const { authenticated } = await checkAuth();
@@ -10,7 +11,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     }
 
     return (
-        <>
+        <AdminModeProvider>
             <style>{`
                 @media (min-width: 1024px) {
                     .admin-main-content {
@@ -29,6 +30,6 @@ export default async function AdminLayout({ children }: { children: React.ReactN
                     </main>
                 </div>
             </div>
-        </>
+        </AdminModeProvider>
     );
 }

@@ -3,34 +3,83 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { createProduct, getCategories, getBrands, uploadImage } from '@/lib/actions';
-import { ArrowLeft, Upload, Save, X, Image as ImageIcon, Loader2 } from 'lucide-react';
+import { ArrowLeft, Upload, Save, X, Image as ImageIcon, Loader2, Trash2, Plus } from 'lucide-react';
 import Link from 'next/link';
 
 interface Category { id: string; name: string; }
 interface Brand { id: string; name: string; }
 
-const COLORS = [
-    { name: 'Black', hex: '#000000' }, { name: 'White', hex: '#FFFFFF' },
-    { name: 'Red', hex: '#EF4444' }, { name: 'Blue', hex: '#3B82F6' },
-    { name: 'Green', hex: '#22C55E' }, { name: 'Brown', hex: '#92400E' },
-];
+interface Variant {
+    id: string; // temp id for UI
+    color_name: string;
+    color_code: string;
+    images: string[];
+    sku: string;
+    stock: number;
+}
 
 const SIZES = ['UK 6', 'UK 7', 'UK 8', 'UK 9', 'UK 10', 'UK 11'];
 
 export default function NewProductPage() {
     const router = useRouter();
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const variantFileInputRef = useRef<HTMLInputElement>(null);
     const [loading, setLoading] = useState(false);
     const [uploading, setUploading] = useState(false);
     const [categories, setCategories] = useState<Category[]>([]);
     const [brands, setBrands] = useState<Brand[]>([]);
 
+    const [activeTab, setActiveTab] = useState<'general' | 'retail' | 'wholesale'>('general');
+
     const [form, setForm] = useState({
-        name: '', description: '', price: '', sale_price: '', stock: '50',
-        images: [] as string[], colors: [] as string[], sizes: [] as string[],
+        name: '', description: '', description_wholesale: '', price: '', sale_price: '', stock: '50',
+        images: [] as string[], sizes: [] as string[],
         category_id: '', brand_id: '', is_active: true, is_new_arrival: false, is_bestseller: false,
         price_wholesale: '', moq: '',
     });
+
+    // Variants State
+    const [variants, setVariants] = useState<Variant[]>([]);
+    const [activeVariantId, setActiveVariantId] = useState<string | null>(null); // For image upload targeting
+
+    const addVariant = () => {
+        const newId = Math.random().toString(36).substr(2, 9);
+        setVariants([...variants, {
+            id: newId,
+            color_name: 'New Color',
+            color_code: '#000000',
+            images: [],
+            sku: '',
+            stock: 0
+        }]);
+    };
+
+    const updateVariant = (id: string, field: keyof Variant, value: any) => {
+        setVariants(variants.map(v => v.id === id ? { ...v, [field]: value } : v));
+    };
+
+    const removeVariant = (id: string) => {
+        setVariants(variants.filter(v => v.id !== id));
+    };
+
+    // B2B: Price Tiers State
+    const [priceTiers, setPriceTiers] = useState<{ min_quantity: string, unit_price: string, tier_name: string }[]>([
+        { min_quantity: '10', unit_price: '', tier_name: 'Bulk Tier 1' }
+    ]);
+
+    const addTier = () => {
+        setPriceTiers([...priceTiers, { min_quantity: '', unit_price: '', tier_name: `Bulk Tier ${priceTiers.length + 1}` }]);
+    };
+
+    const removeTier = (index: number) => {
+        setPriceTiers(priceTiers.filter((_, i) => i !== index));
+    };
+
+    const updateTier = (index: number, field: string, value: string) => {
+        const newTiers = [...priceTiers];
+        (newTiers[index] as any)[field] = value;
+        setPriceTiers(newTiers);
+    };
 
     useEffect(() => {
         Promise.all([getCategories(), getBrands()]).then(([cats, brnds]) => {
@@ -39,8 +88,8 @@ export default function NewProductPage() {
         });
     }, []);
 
-    // Server-side image upload using FormData
-    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Server-side image upload
+    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, target: 'main' | 'variant') => {
         const files = e.target.files;
         if (!files?.length) return;
 
@@ -50,24 +99,27 @@ export default function NewProductPage() {
         for (const file of Array.from(files)) {
             const formData = new FormData();
             formData.append('file', file);
-
             const result = await uploadImage(formData);
-
             if (result.success && result.url) {
                 newImages.push(result.url);
             } else {
-                console.error('Upload failed:', result.error);
                 alert('Image upload failed: ' + result.error);
             }
         }
 
         if (newImages.length > 0) {
-            setForm({ ...form, images: [...form.images, ...newImages] });
+            if (target === 'main') {
+                setForm({ ...form, images: [...form.images, ...newImages] });
+            } else if (target === 'variant' && activeVariantId) {
+                const variant = variants.find(v => v.id === activeVariantId);
+                if (variant) {
+                    updateVariant(activeVariantId, 'images', [...variant.images, ...newImages]);
+                }
+            }
         }
         setUploading(false);
-
-        // Reset file input
-        if (fileInputRef.current) fileInputRef.current.value = '';
+        if (target === 'main' && fileInputRef.current) fileInputRef.current.value = '';
+        if (target === 'variant' && variantFileInputRef.current) variantFileInputRef.current.value = '';
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -79,15 +131,20 @@ export default function NewProductPage() {
 
         setLoading(true);
 
-        const result = await createProduct({
-            name: form.name,
-            description: form.description,
+        // Map variants to clean structure (remove UI ID)
+        const cleanVariants = variants.map(({ id, ...rest }) => rest);
+
+        // Determine colors for main table (backup)
+        const colorNames = variants.length > 0 ? variants.map(v => v.color_name) : [];
+
+        const payload: any = {
+            ...form,
             price: parseFloat(form.price),
             sale_price: form.sale_price ? parseFloat(form.sale_price) : null,
             stock: parseInt(form.stock) || 0,
-            thumbnail: form.images[0] || '',
+            thumbnail: form.images[0] || (variants[0]?.images[0] || ''),
             images: form.images,
-            colors: form.colors,
+            colors: colorNames, // Legacy support
             sizes: form.sizes,
             category_id: form.category_id || null,
             brand_id: form.brand_id || null,
@@ -95,9 +152,22 @@ export default function NewProductPage() {
             is_new_arrival: form.is_new_arrival,
             is_bestseller: form.is_bestseller,
             is_on_sale: !!form.sale_price,
-            price_wholesale: (form as any).price_wholesale ? parseFloat((form as any).price_wholesale) : null,
-            moq: (form as any).moq ? parseInt((form as any).moq) : 1,
-        });
+            price_wholesale: form.price_wholesale ? parseFloat(form.price_wholesale) : null,
+            moq: form.moq ? parseInt(form.moq) : 1,
+            description_wholesale: form.description_wholesale,
+            // Include Data
+            variants: cleanVariants,
+            price_tiers: priceTiers
+                .filter((t: any) => t.min_quantity && t.unit_price)
+                .map((t: any) => ({
+                    min_quantity: parseInt(t.min_quantity),
+                    max_quantity: null,
+                    unit_price: parseFloat(t.unit_price),
+                    tier_name: t.tier_name
+                }))
+        };
+
+        const result = await createProduct(payload);
 
         if (result.success) {
             router.push('/products');
@@ -118,123 +188,222 @@ export default function NewProductPage() {
                 </div>
             </div>
 
-            <form onSubmit={handleSubmit}>
+            <form onSubmit={handleSubmit} className="mt-6">
+
+                {/* TABS */}
+                <div className="flex gap-4 border-b border-slate-800 mb-6">
+                    {['general', 'retail', 'wholesale'].map((t) => (
+                        <button
+                            key={t}
+                            type="button"
+                            onClick={() => setActiveTab(t as any)}
+                            className={`pb-3 px-4 text-sm font-medium capitalize transition-colors border-b-2 ${activeTab === t
+                                    ? 'border-blue-500 text-blue-400'
+                                    : 'border-transparent text-slate-400 hover:text-slate-200'
+                                }`}
+                        >
+                            {t} Details
+                        </button>
+                    ))}
+                </div>
+
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 350px', gap: 24 }}>
-                    {/* Left */}
+                    {/* Left Column */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-                        {/* Basic Info */}
-                        <div className="card">
-                            <div className="card-header"><h3 style={{ fontSize: 16, fontWeight: 600, color: 'white' }}>Basic Information</h3></div>
-                            <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                                <div>
-                                    <label style={{ display: 'block', fontSize: 14, fontWeight: 500, color: '#9ca3af', marginBottom: 8 }}>Product Name *</label>
-                                    <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Nike Air Max 270" required />
-                                </div>
-                                <div>
-                                    <label style={{ display: 'block', fontSize: 14, fontWeight: 500, color: '#9ca3af', marginBottom: 8 }}>Description</label>
-                                    <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Product details..." style={{ height: 120, resize: 'none', padding: 12 }} />
-                                </div>
-                            </div>
-                        </div>
 
-                        {/* Images */}
-                        <div className="card">
-                            <div className="card-header"><h3 style={{ fontSize: 16, fontWeight: 600, color: 'white', display: 'flex', alignItems: 'center', gap: 8 }}><ImageIcon size={18} /> Product Images</h3></div>
-                            <div className="card-body">
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
-                                    {form.images.map((img, i) => (
-                                        <div key={i} style={{ position: 'relative', aspectRatio: '1', background: '#1f2937', borderRadius: 8, overflow: 'hidden' }}>
-                                            <img src={img} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                            <button type="button" onClick={() => setForm({ ...form, images: form.images.filter((_, idx) => idx !== i) })} style={{ position: 'absolute', top: 4, right: 4, padding: 4, background: '#ef4444', border: 'none', borderRadius: 4, cursor: 'pointer' }}>
-                                                <X size={12} style={{ color: 'white' }} />
-                                            </button>
-                                            {i === 0 && <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(0,0,0,0.7)', padding: '4px 0', textAlign: 'center', fontSize: 10, color: 'white' }}>Main</div>}
+                        {/* GENERAL TAB */}
+                        {activeTab === 'general' && (
+                            <>
+                                {/* Basic Info */}
+                                <div className="card">
+                                    <div className="card-header"><h3 style={{ fontSize: 16, fontWeight: 600, color: 'white' }}>Core Information</h3></div>
+                                    <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: 14, fontWeight: 500, color: '#9ca3af', marginBottom: 8 }}>Product Name *</label>
+                                            <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Nike Air Max 270" required className="w-full bg-slate-900 border border-slate-700 rounded p-3 text-white" />
                                         </div>
-                                    ))}
-                                    {form.images.length < 4 && (
-                                        <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading} style={{ aspectRatio: '1', border: '2px dashed #374151', borderRadius: 8, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'transparent', cursor: uploading ? 'wait' : 'pointer', opacity: uploading ? 0.5 : 1 }}>
-                                            {uploading ? <Loader2 size={20} style={{ color: '#6b7280', animation: 'spin 1s linear infinite' }} /> : <Upload size={20} style={{ color: '#6b7280' }} />}
-                                            <span style={{ fontSize: 11, color: '#6b7280', marginTop: 4 }}>{uploading ? 'Uploading...' : 'Add'}</span>
-                                        </button>
-                                    )}
+                                    </div>
                                 </div>
-                                <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept="image/*" multiple style={{ display: 'none' }} />
-                                <p style={{ fontSize: 12, color: '#6b7280', marginTop: 12 }}>Upload up to 4 images. First image will be the thumbnail.</p>
-                            </div>
-                        </div>
 
-                        {/* Colors */}
-                        <div className="card">
-                            <div className="card-header"><h3 style={{ fontSize: 16, fontWeight: 600, color: 'white' }}>Colors</h3></div>
-                            <div className="card-body">
-                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                                    {COLORS.map((c) => (
-                                        <button key={c.name} type="button" onClick={() => setForm({ ...form, colors: form.colors.includes(c.name) ? form.colors.filter(x => x !== c.name) : [...form.colors, c.name] })} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', border: form.colors.includes(c.name) ? '2px solid #3b82f6' : '1px solid #374151', borderRadius: 8, background: form.colors.includes(c.name) ? 'rgba(59,130,246,0.1)' : 'transparent', cursor: 'pointer' }}>
-                                            <div style={{ width: 20, height: 20, borderRadius: '50%', background: c.hex, border: '1px solid #374151' }} />
-                                            <span style={{ fontSize: 13, color: 'white' }}>{c.name}</span>
-                                        </button>
-                                    ))}
+                                {/* Images */}
+                                <div className="card">
+                                    <div className="card-header"><h3 style={{ fontSize: 16, fontWeight: 600, color: 'white', display: 'flex', alignItems: 'center', gap: 8 }}><ImageIcon size={18} /> Main Images</h3></div>
+                                    <div className="card-body">
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+                                            {form.images.map((img, i) => (
+                                                <div key={i} style={{ position: 'relative', aspectRatio: '1', background: '#1f2937', borderRadius: 8, overflow: 'hidden' }}>
+                                                    <img src={img} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                                    <button type="button" onClick={() => setForm({ ...form, images: form.images.filter((_, idx) => idx !== i) })} style={{ position: 'absolute', top: 4, right: 4, padding: 4, background: '#ef4444', border: 'none', borderRadius: 4, cursor: 'pointer' }}>
+                                                        <X size={12} style={{ color: 'white' }} />
+                                                    </button>
+                                                </div>
+                                            ))}
+                                            {form.images.length < 4 && (
+                                                <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading} style={{ aspectRatio: '1', border: '2px dashed #374151', borderRadius: 8, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'transparent', cursor: uploading ? 'wait' : 'pointer', opacity: uploading ? 0.5 : 1 }}>
+                                                    {uploading ? <Loader2 size={20} style={{ color: '#6b7280', animation: 'spin 1s linear infinite' }} /> : <Upload size={20} style={{ color: '#6b7280' }} />}
+                                                    <span style={{ fontSize: 11, color: '#6b7280', marginTop: 4 }}>{uploading ? 'Uploading...' : 'Add'}</span>
+                                                </button>
+                                            )}
+                                        </div>
+                                        <input type="file" ref={fileInputRef} onChange={(e) => handleFileUpload(e, 'main')} accept="image/*" multiple style={{ display: 'none' }} />
+                                    </div>
                                 </div>
-                            </div>
-                        </div>
 
-                        {/* Sizes */}
-                        <div className="card">
-                            <div className="card-header"><h3 style={{ fontSize: 16, fontWeight: 600, color: 'white' }}>Sizes</h3></div>
-                            <div className="card-body">
-                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                                    {SIZES.map((s) => (
-                                        <button key={s} type="button" onClick={() => setForm({ ...form, sizes: form.sizes.includes(s) ? form.sizes.filter(x => x !== s) : [...form.sizes, s] })} style={{ padding: '8px 16px', border: form.sizes.includes(s) ? '2px solid #3b82f6' : '1px solid #374151', borderRadius: 8, background: form.sizes.includes(s) ? '#3b82f6' : 'transparent', color: 'white', cursor: 'pointer', fontSize: 13 }}>
-                                            {s}
+                                {/* Variants */}
+                                <div className="card">
+                                    <div className="card-header flex justify-between items-center">
+                                        <h2 className="text-lg font-semibold text-white">Variants (Colors)</h2>
+                                        <button type="button" onClick={addVariant} className="text-sm text-blue-400 hover:text-blue-300 font-medium flex items-center gap-1">
+                                            <Plus size={16} /> Add Variant
                                         </button>
-                                    ))}
+                                    </div>
+                                    <div className="card-body space-y-6">
+                                        {variants.length === 0 && <div className="text-gray-500 text-sm text-center py-4">No variants added.</div>}
+                                        {variants.map((variant, index) => (
+                                            <div key={variant.id} className="p-4 bg-slate-900 border border-slate-700 rounded-lg">
+                                                <div className="flex justify-between items-start mb-4">
+                                                    <h4 className="text-sm font-bold text-white uppercase tracking-wider">Variant #{index + 1}</h4>
+                                                    <button type="button" onClick={() => removeVariant(variant.id)} className="text-red-400 hover:text-red-300"><Trash2 size={16} /></button>
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-4 mb-4">
+                                                    <div>
+                                                        <label className="block text-xs text-gray-400 mb-1">Color Name</label>
+                                                        <input value={variant.color_name} onChange={(e) => updateVariant(variant.id, 'color_name', e.target.value)} className="w-full bg-slate-800 border border-slate-600 rounded p-2 text-sm text-white" />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-xs text-gray-400 mb-1">Color Code</label>
+                                                        <div className="flex gap-2">
+                                                            <input type="color" value={variant.color_code} onChange={(e) => updateVariant(variant.id, 'color_code', e.target.value)} className="h-9 w-12 bg-transparent border-none p-0 cursor-pointer" />
+                                                            <input value={variant.color_code} onChange={(e) => updateVariant(variant.id, 'color_code', e.target.value)} className="flex-1 bg-slate-800 border border-slate-600 rounded p-2 text-sm text-white" />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    <label className="block text-xs text-gray-400 mb-2">Images</label>
+                                                    <div className="flex gap-2 overflow-x-auto pb-2">
+                                                        {variant.images.map((img, i) => (
+                                                            <div key={i} className="relative w-16 h-16 flex-shrink-0 bg-gray-800 rounded overflow-hidden group">
+                                                                <img src={img} className="w-full h-full object-cover" />
+                                                                <button type="button" onClick={() => updateVariant(variant.id, 'images', variant.images.filter((_, idx) => idx !== i))} className="absolute top-0 right-0 p-1 bg-red-500 text-white opacity-0 group-hover:opacity-100 transition-opacity"><X size={10} /></button>
+                                                            </div>
+                                                        ))}
+                                                        <button type="button" onClick={() => { setActiveVariantId(variant.id); variantFileInputRef.current?.click(); }} className="w-16 h-16 border border-dashed border-gray-600 rounded flex items-center justify-center text-gray-500 hover:border-gray-400 hover:text-gray-400 transition-colors"><Upload size={14} /></button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <input type="file" ref={variantFileInputRef} onChange={(e) => handleFileUpload(e, 'variant')} accept="image/*" multiple style={{ display: 'none' }} />
                                 </div>
-                            </div>
-                        </div>
+                            </>
+                        )}
+
+                        {/* RETAIL TAB */}
+                        {activeTab === 'retail' && (
+                            <>
+                                <div className="card border-blue-500/20 shadow-lg shadow-blue-500/5">
+                                    <div className="card-header bg-blue-500/10"><h3 style={{ fontSize: 16, fontWeight: 600, color: '#60a5fa' }}>Retail Settings</h3></div>
+                                    <div className="card-body space-y-6">
+                                        <div className="grid grid-cols-2 gap-6">
+                                            <div>
+                                                <label className="block text-sm font-medium text-slate-400 mb-2">Retail Price (₹)</label>
+                                                <input type="number" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} placeholder="9999" required className="w-full bg-slate-900 border border-slate-700 rounded p-3 text-white text-lg font-bold" />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-slate-400 mb-2">Sale Price (₹)</label>
+                                                <input type="number" value={form.sale_price} onChange={(e) => setForm({ ...form, sale_price: e.target.value })} placeholder="7999" className="w-full bg-slate-900 border border-slate-700 rounded p-3 text-white" />
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-400 mb-2">Retail Description</label>
+                                            <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Customer-facing description..." className="w-full bg-slate-900 border border-slate-700 rounded p-3 text-white h-32 resize-none" />
+                                            <p className="text-xs text-slate-500 mt-1">Visible to retail customers in the mobile app.</p>
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-400 mb-2">Available Sizes</label>
+                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                                                {SIZES.map((s) => (
+                                                    <button key={s} type="button" onClick={() => setForm({ ...form, sizes: form.sizes.includes(s) ? form.sizes.filter(x => x !== s) : [...form.sizes, s] })} className={`px-4 py-2 rounded-lg border text-sm transition-all ${form.sizes.includes(s) ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-700 text-slate-400 hover:border-slate-500'}`}>
+                                                        {s}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </>
+                        )}
+
+                        {/* WHOLESALE TAB */}
+                        {activeTab === 'wholesale' && (
+                            <>
+                                <div className="card border-indigo-500/20 shadow-lg shadow-indigo-500/5">
+                                    <div className="card-header bg-indigo-500/10"><h3 style={{ fontSize: 16, fontWeight: 600, color: '#818cf8' }}>B2B / Wholesale Settings</h3></div>
+                                    <div className="card-body space-y-6">
+                                        <div className="grid grid-cols-2 gap-6">
+                                            <div>
+                                                <label className="block text-sm font-medium text-slate-400 mb-2">Wholesale Price (₹)</label>
+                                                <input type="number" value={(form as any).price_wholesale || ''} onChange={(e) => setForm({ ...form, price_wholesale: e.target.value } as any)} placeholder="Base B2B Price" className="w-full bg-slate-900 border border-slate-700 rounded p-3 text-white" />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-slate-400 mb-2">MOQ (Min Order Qty)</label>
+                                                <input type="number" value={(form as any).moq || ''} onChange={(e) => setForm({ ...form, moq: e.target.value } as any)} placeholder="Default: 10" className="w-full bg-slate-900 border border-slate-700 rounded p-3 text-white" />
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-400 mb-2">Wholesale Description (Technical/Bulk Info)</label>
+                                            <textarea value={(form as any).description_wholesale || ''} onChange={(e) => setForm({ ...form, description_wholesale: e.target.value } as any)} placeholder="Details for dealers (packing, weight, etc)..." className="w-full bg-slate-900 border border-slate-700 rounded p-3 text-white h-32 resize-none" />
+                                            <p className="text-xs text-slate-500 mt-1">Visible ONLY to verified wholesale dealers.</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Volume Pricing */}
+                                <div className="card">
+                                    <div className="card-header flex justify-between items-center">
+                                        <h2 className="text-lg font-semibold text-white">Volume Discount Rules</h2>
+                                        <button type="button" onClick={addTier} className="text-sm text-blue-400 hover:text-blue-300 font-medium flex items-center gap-1">+ Add Tier</button>
+                                    </div>
+                                    <div className="card-body space-y-4">
+                                        {priceTiers.map((tier, index) => (
+                                            <div key={index} className="flex items-end gap-3 p-3 bg-slate-800/50 rounded-lg border border-slate-700/50">
+                                                <div className="flex-1">
+                                                    <div style={{ marginBottom: 4, fontSize: 13, color: '#9ca3af' }}>Tier Name</div>
+                                                    <input value={tier.tier_name} onChange={(e) => updateTier(index, 'tier_name', e.target.value)} placeholder="e.g. Gold Tier" className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white text-sm" />
+                                                </div>
+                                                <div className="w-24">
+                                                    <div style={{ marginBottom: 4, fontSize: 13, color: '#9ca3af' }}>Min Qty</div>
+                                                    <input type="number" value={tier.min_quantity} onChange={(e) => updateTier(index, 'min_quantity', e.target.value)} placeholder="10" className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white text-sm" />
+                                                </div>
+                                                <div className="w-32">
+                                                    <div style={{ marginBottom: 4, fontSize: 13, color: '#9ca3af' }}>Unit Price (₹)</div>
+                                                    <input type="number" value={tier.unit_price} onChange={(e) => updateTier(index, 'unit_price', e.target.value)} placeholder="850" className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white text-sm" />
+                                                </div>
+                                                <button type="button" onClick={() => removeTier(index)} style={{ padding: 10, color: '#9ca3af', marginBottom: 2, cursor: 'pointer' }}><Trash2 size={18} /></button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </>
+                        )}
                     </div>
 
                     {/* Right Sidebar */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-                        {/* Pricing */}
-                        <div className="card">
-                            <div className="card-header"><h3 style={{ fontSize: 16, fontWeight: 600, color: 'white' }}>Pricing</h3></div>
-                            <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                                <div>
-                                    <label style={{ display: 'block', fontSize: 13, color: '#9ca3af', marginBottom: 6 }}>Price (₹) *</label>
-                                    <input type="number" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} placeholder="9999" required />
-                                </div>
-                                <div>
-                                    <label style={{ display: 'block', fontSize: 13, color: '#9ca3af', marginBottom: 6 }}>Sale Price (₹)</label>
-                                    <input type="number" value={form.sale_price} onChange={(e) => setForm({ ...form, sale_price: e.target.value })} placeholder="7999" />
-                                </div>
-                                <div>
-                                    <input type="number" value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} />
-                                </div>
-                                <div style={{ borderTop: '1px solid #374151', paddingTop: 12, marginTop: 6 }}>
-                                    <label style={{ display: 'block', fontSize: 13, color: '#60a5fa', marginBottom: 6 }}>Wholesale Price (B2B)</label>
-                                    <input type="number" value={(form as any).price_wholesale || ''} onChange={(e) => setForm({ ...form, price_wholesale: e.target.value } as any)} placeholder="B2B Price" style={{ borderColor: 'rgba(59,130,246,0.3)' }} />
-                                </div>
-                                <div>
-                                    <label style={{ display: 'block', fontSize: 13, color: '#60a5fa', marginBottom: 6 }}>MOQ (Minimum Order Qty)</label>
-                                    <input type="number" value={(form as any).moq || ''} onChange={(e) => setForm({ ...form, moq: e.target.value } as any)} placeholder="Default: 1" style={{ borderColor: 'rgba(59,130,246,0.3)' }} />
-                                </div>
-                            </div>
-                        </div>
-
                         {/* Organization */}
                         <div className="card">
                             <div className="card-header"><h3 style={{ fontSize: 16, fontWeight: 600, color: 'white' }}>Organization</h3></div>
                             <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                                 <div>
                                     <label style={{ display: 'block', fontSize: 13, color: '#9ca3af', marginBottom: 6 }}>Category</label>
-                                    <select value={form.category_id} onChange={(e) => setForm({ ...form, category_id: e.target.value })}>
+                                    <select value={form.category_id} onChange={(e) => setForm({ ...form, category_id: e.target.value })} className="w-full bg-slate-900 border-slate-700 text-slate-300 rounded p-2">
                                         <option value="">Select Category</option>
                                         {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                                     </select>
                                 </div>
                                 <div>
                                     <label style={{ display: 'block', fontSize: 13, color: '#9ca3af', marginBottom: 6 }}>Brand</label>
-                                    <select value={form.brand_id} onChange={(e) => setForm({ ...form, brand_id: e.target.value })}>
+                                    <select value={form.brand_id} onChange={(e) => setForm({ ...form, brand_id: e.target.value })} className="w-full bg-slate-900 border-slate-700 text-slate-300 rounded p-2">
                                         <option value="">Select Brand</option>
                                         {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                                     </select>
@@ -246,12 +415,20 @@ export default function NewProductPage() {
                         <div className="card">
                             <div className="card-header"><h3 style={{ fontSize: 16, fontWeight: 600, color: 'white' }}>Visibility</h3></div>
                             <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                                {[{ key: 'is_active', label: 'Active (visible in app)' }, { key: 'is_new_arrival', label: 'New Arrival' }, { key: 'is_bestseller', label: 'Bestseller' }].map(({ key, label }) => (
+                                {[{ key: 'is_active', label: 'Active (visible)' }, { key: 'is_new_arrival', label: 'New Arrival' }, { key: 'is_bestseller', label: 'Bestseller' }].map(({ key, label }) => (
                                     <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
                                         <input type="checkbox" checked={(form as any)[key]} onChange={(e) => setForm({ ...form, [key]: e.target.checked })} style={{ width: 18, height: 18 }} />
                                         <span style={{ fontSize: 14, color: '#e2e8f0' }}>{label}</span>
                                     </label>
                                 ))}
+                            </div>
+                        </div>
+
+                        {/* Stock (Quick Access) */}
+                        <div className="card">
+                            <div className="card-body">
+                                <label style={{ display: 'block', fontSize: 13, color: '#9ca3af', marginBottom: 6 }}>Total Stock (Global)</label>
+                                <input type="number" value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} className="w-full bg-slate-900 border-slate-700 text-slate-300 rounded p-2" />
                             </div>
                         </div>
 

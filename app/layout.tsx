@@ -24,8 +24,8 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
-      <body className={inter.className} style={{ margin: 0, background: '#0a0a0a', color: '#fafafa' }}>
+    <html lang="en" suppressHydrationWarning>
+      <body className={inter.className} style={{ margin: 0, background: '#0a0a0a', color: '#fafafa' }} suppressHydrationWarning>
         {children}
       </body>
     </html>

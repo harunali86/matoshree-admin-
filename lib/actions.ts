@@ -25,19 +25,87 @@ export async function saveSettings(settings: { store: any; shipping: any; pages:
 
 // Products
 export async function getProducts() {
-    const { data, error } = await supabase.from('products').select('*').order('created_at', { ascending: false });
+    const { data, error } = await supabase.from('products').select('*, price_tiers(*), product_variants(*)').order('created_at', { ascending: false });
     if (error) return [];
     return data || [];
 }
 
 export async function createProduct(product: any) {
-    const { error } = await supabase.from('products').insert(product);
-    return { success: !error, error: error?.message };
+    const { price_tiers, variants, ...productData } = product;
+
+    // 1. Insert Product
+    const { data, error } = await supabase.from('products').insert(productData).select().single();
+
+    if (error) return { success: false, error: error.message };
+
+    // 2. Insert Price Tiers if any
+    if (price_tiers && price_tiers.length > 0 && data) {
+        const tiersToInsert = price_tiers.map((tier: any) => ({
+            ...tier,
+            product_id: data.id
+        }));
+
+        const { error: tierError } = await supabase.from('price_tiers').insert(tiersToInsert);
+        if (tierError) console.error('Error inserting tiers:', tierError);
+    }
+
+    // 3. Insert Variants if any
+    if (variants && variants.length > 0 && data) {
+        const variantsToInsert = variants.map((v: any) => ({
+            product_id: data.id,
+            color_name: v.color_name,
+            color_code: v.color_code,
+            images: v.images || [],
+            sku: v.sku || null,
+            stock: v.stock || 0
+        }));
+
+        const { error: varError } = await supabase.from('product_variants').insert(variantsToInsert);
+        if (varError) console.error('Error inserting variants:', varError);
+    }
+
+    return { success: true, error: null };
 }
 
 export async function updateProduct(id: string, updates: any) {
-    const { error } = await supabase.from('products').update(updates).eq('id', id);
-    return { success: !error, error: error?.message };
+    const { price_tiers, variants, ...productData } = updates;
+
+    // 1. Update Product
+    const { error } = await supabase.from('products').update(productData).eq('id', id);
+    if (error) return { success: false, error: error.message };
+
+    // 2. Update Tiers (Delete all old, insert new)
+    if (price_tiers) {
+        await supabase.from('price_tiers').delete().eq('product_id', id);
+        if (price_tiers.length > 0) {
+            const tiersToInsert = price_tiers.map((tier: any) => ({
+                product_id: id,
+                min_quantity: tier.min_quantity,
+                max_quantity: tier.max_quantity,
+                unit_price: tier.unit_price,
+                tier_name: tier.tier_name
+            }));
+            await supabase.from('price_tiers').insert(tiersToInsert);
+        }
+    }
+
+    // 3. Update Variants (Delete all old, insert new)
+    if (variants) {
+        await supabase.from('product_variants').delete().eq('product_id', id);
+        if (variants.length > 0) {
+            const variantsToInsert = variants.map((v: any) => ({
+                product_id: id,
+                color_name: v.color_name,
+                color_code: v.color_code,
+                images: v.images || [],
+                sku: v.sku || null,
+                stock: v.stock || 0
+            }));
+            await supabase.from('product_variants').insert(variantsToInsert);
+        }
+    }
+
+    return { success: true, error: null };
 }
 
 export async function deleteProduct(id: string) {
@@ -122,6 +190,10 @@ export async function getOrders() {
                 quantity,
                 size,
                 product:products (name)
+            ),
+            user:profiles (
+                role,
+                full_name
             )
         `)
         .order('created_at', { ascending: false });
@@ -133,30 +205,52 @@ export async function updateOrderStatus(id: string, status: string) {
         const { error } = await supabase.rpc('cancel_order', { p_order_id: id });
         return { success: !error, error: error?.message };
     }
+    const { data: order } = await supabase.from('orders').select('user_id').eq('id', id).single();
     const { error } = await supabase.from('orders').update({ status }).eq('id', id);
+
+    // Automated Notification Trigger
+    if (!error && order?.user_id) {
+        let title = '', body = '';
+        if (status === 'Shipped') { title = 'Order Shipped! 🚀'; body = 'Your order is on its way.'; }
+        else if (status === 'Delivered') { title = 'Order Delivered! 🎉'; body = 'Your order has been delivered.'; }
+        else if (status === 'Processing') { title = 'Order Confirmed ✅'; body = 'We are processing your order.'; }
+
+        if (title) {
+            await sendNotificationToUser(order.user_id, title, body, { url: `/orders/${id}` });
+        }
+    }
+
     return { success: !error, error: error?.message };
 }
 
-// Coupons
-export async function getCoupons() {
-    const { data } = await supabase.from('coupons').select('*').order('created_at', { ascending: false });
-    return data || [];
+export async function generateShipmentAction(orderId: string) {
+    // 1. Fetch Order
+    const { data: order, error } = await supabase
+        .from('orders')
+        .select(`*, address:addresses(*), user:user_id(email), items:order_items(*, product:products(name))`)
+        .eq('id', orderId)
+        .single();
+
+    if (!order) return { success: false, error: 'Order not found' };
+
+    // 2. Call Shiprocket (Mocked for now)
+    const { createShipmentOrder } = await import('./shiprocket');
+    const shipment = await createShipmentOrder(order);
+
+    if (shipment.success) {
+        // 3. Update Order with AWB
+        await supabase.from('orders').update({
+            status: 'Shipped',
+            tracking_number: shipment.awb_code
+        }).eq('id', orderId);
+
+        return { success: true, awb: shipment.awb_code };
+    }
+
+    return { success: false, error: 'Shipment failed' };
 }
 
-export async function createCoupon(coupon: any) {
-    const { error } = await supabase.from('coupons').insert(coupon);
-    return { success: !error, error: error?.message };
-}
 
-export async function updateCoupon(id: string, updates: any) {
-    const { error } = await supabase.from('coupons').update(updates).eq('id', id);
-    return { success: !error, error: error?.message };
-}
-
-export async function deleteCoupon(id: string) {
-    const { error } = await supabase.from('coupons').delete().eq('id', id);
-    return { success: !error, error: error?.message };
-}
 
 // Reviews
 export async function getReviews() {
@@ -334,4 +428,205 @@ export async function sendNotificationToAll(title: string, body: string) {
         console.error('Push Error:', e);
         return { success: false, error: e.message };
     }
+}
+
+
+export async function sendNotificationToUser(userId: string, title: string, body: string, data = {}) {
+    const { data: profile } = await supabase.from('profiles').select('push_token').eq('id', userId).single();
+
+    if (!profile || !profile.push_token || !profile.push_token.startsWith('ExponentPushToken')) {
+        return { success: false, error: 'No valid push token found' };
+    }
+
+    const message = {
+        to: profile.push_token,
+        sound: 'default',
+        title,
+        body,
+        data,
+    };
+
+    try {
+        await fetch('https://exp.host/--/api/v2/push/send', {
+            method: 'POST',
+            headers: {
+                'Accept': 'application/json',
+                'Accept-encoding': 'gzip, deflate',
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify([message]),
+        });
+        return { success: true };
+    } catch (e: any) {
+        console.error('Push Error:', e);
+        return { success: false, error: e.message };
+    }
+}
+// Quotations
+export async function getQuotation(id: string) {
+    const { data, error } = await supabase
+        .from('quotations')
+        .select(`
+            *,
+            profile:profiles(*)
+        `)
+        .eq('id', id)
+        .single();
+    if (error) return null;
+    return data;
+}
+
+export async function createQuotation(quotation: any) {
+    const { error } = await supabase.from('quotations').insert(quotation);
+    return { success: !error, error: error?.message };
+}
+
+// App Config (System Settings)
+export async function getAppConfig(key: string) {
+    const { data, error } = await supabase.from('app_config').select('value').eq('key', key).single();
+    if (error) return null;
+    return data.value;
+}
+
+export async function updateAppConfig(key: string, value: any) {
+    const { error } = await supabase.from('app_config').upsert({ key, value, updated_at: new Date().toISOString() });
+    return { success: !error, error: error?.message };
+}
+
+// Returns Management
+export async function getReturns() {
+    const { data, error } = await supabase
+        .from('returns')
+        .select(`
+            *,
+            order:orders(invoice_number, total_amount),
+            user:user_id(email, raw_user_meta_data)
+        `)
+        .order('created_at', { ascending: false });
+
+    if (error) console.error('Error fetching returns:', error);
+    return data || [];
+}
+
+export async function updateReturnStatus(id: string, status: string) {
+    // Update Return Entry
+    const { error } = await supabase
+        .from('returns')
+        .update({ status })
+        .eq('id', id);
+
+    if (error) {
+        console.error('Error updating return:', error);
+        return false;
+    }
+
+    // Sync with Order
+    const { data: ret } = await supabase.from('returns').select('order_id').eq('id', id).single();
+    if (ret) {
+        await supabase.from('orders').update({ return_status: status }).eq('id', ret.order_id);
+    }
+
+    return true;
+}
+
+export async function createReplacementOrder(returnId: string) {
+    // Uses global supabase instance
+
+    // 1. Fetch Return & Original Order
+    const { data: ret } = await supabase.from('returns').select('*, order:orders(*, items:order_items(*))').eq('id', returnId).single();
+    if (!ret || !ret.order) return { success: false, error: 'Original order not found' };
+
+    const originalOrder = ret.order;
+    const items = originalOrder.items;
+
+    // 2. Create New Zero-Cost Order
+    const { data: newOrder, error: orderError } = await supabase.from('orders').insert({
+        user_id: originalOrder.user_id,
+        status: 'Processing',
+        total_amount: 0, // Free Replacement
+        payment_status: 'Paid',
+        payment_method: 'Replacement',
+        address_id: originalOrder.address_id, // Same Address
+        is_wholesale: originalOrder.is_wholesale,
+        invoice_number: `RPL-${Date.now().toString().slice(-6)}`, // Unique Invoice
+        po_number: originalOrder.po_number ? `RPL-for-${originalOrder.po_number}` : null
+    }).select().single();
+
+    if (orderError) return { success: false, error: orderError.message };
+
+    // 3. Clone Items
+    const newItems = items.map((item: any) => ({
+        order_id: newOrder.id,
+        product_id: item.product_id,
+        quantity: item.quantity,
+        size: item.size,
+        price: 0 // Free
+    }));
+
+    const { error: itemsError } = await supabase.from('order_items').insert(newItems);
+    if (itemsError) return { success: false, error: itemsError.message };
+
+    // 4. Update Return Status
+    await supabase.from('returns').update({
+        status: 'approved',
+        action_type: 'replacement',
+        replacement_order_id: newOrder.id
+    }).eq('id', returnId);
+
+    // 5. Mark Original Order
+    await supabase.from('orders').update({ return_status: 'replaced' }).eq('id', originalOrder.id);
+
+    return { success: true };
+}
+
+
+// Quotations Status Update
+export async function updateQuotationStatus(id: string, status: string) {
+    const { error } = await supabase.from('quotations').update({ status }).eq('id', id);
+    return { success: !error, error: error?.message };
+}
+
+// Coupons
+export async function getCoupons() {
+    const { data, error } = await supabase.from('coupons').select('*').order('created_at', { ascending: false });
+    if (error) return [];
+    return data;
+}
+
+export async function createCoupon(coupon: any) {
+    const { error } = await supabase.from('coupons').insert(coupon);
+    return { success: !error, error: error?.message };
+}
+
+export async function deleteCoupon(id: string) {
+    const { error } = await supabase.from('coupons').delete().eq('id', id);
+    return { success: !error, error: error?.message };
+}
+
+export async function validateCoupon(code: string, cartTotal: number) {
+    const { data, error } = await supabase.from('coupons')
+        .select('*')
+        .eq('code', code)
+        .eq('is_active', true)
+        .single();
+
+    if (error || !data) return { valid: false, message: 'Invalid or inactive coupon code.' };
+
+    const now = new Date();
+    if (data.start_date && new Date(data.start_date) > now) return { valid: false, message: 'Coupon is not yet valid.' };
+    if (data.end_date && new Date(data.end_date) < now) return { valid: false, message: 'Coupon has expired.' };
+    if (data.usage_limit && data.usage_count >= data.usage_limit) return { valid: false, message: 'Coupon usage limit reached.' };
+    if (cartTotal < data.min_order_value) return { valid: false, message: `Minimum order value of ₹${data.min_order_value} required.` };
+
+    let discountAmount = 0;
+    if (data.discount_type === 'percentage') {
+        discountAmount = (cartTotal * data.discount_value) / 100;
+        if (data.max_discount_value && discountAmount > data.max_discount_value) {
+            discountAmount = data.max_discount_value;
+        }
+    } else {
+        discountAmount = data.discount_value;
+    }
+
+    return { valid: true, discountAmount, coupon: data };
 }

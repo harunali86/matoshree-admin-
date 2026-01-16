@@ -3,6 +3,7 @@
 import { Search, Bell, LogOut } from 'lucide-react';
 import { logout } from '@/lib/auth';
 import { useRouter } from 'next/navigation';
+import { ModeToggle } from '@/components/mode-toggle';
 
 export function Header() {
     const router = useRouter();
@@ -35,6 +36,11 @@ export function Header() {
 
                 {/* Right */}
                 <div className="flex items-center gap-3">
+                    {/* Mode Toggle */}
+                    <div className="mr-2">
+                        <ModeToggle />
+                    </div>
+
                     {/* Mobile Search */}
                     <button className="sm:hidden p-2.5 bg-slate-800 hover:bg-slate-700 rounded-xl transition-colors">
                         <Search size={20} className="text-slate-400" />

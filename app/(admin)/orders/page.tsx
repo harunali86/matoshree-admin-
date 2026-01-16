@@ -5,23 +5,20 @@ import { getOrders, updateOrderStatus } from '@/lib/actions';
 import Link from 'next/link';
 import { Search, Download, Package, Clock, Truck, CheckCircle } from 'lucide-react';
 
-interface Order {
-    id: string;
-    invoice_number?: string;
-    created_at: string;
-    total_amount: number;
-    status: string;
-    payment_method: string;
-    items?: { quantity: number; size: number | string; product?: { name: string } }[];
-}
+import { useAdminMode } from '@/components/providers/AdminModeProvider';
 
 export default function OrdersPage() {
-    const [orders, setOrders] = useState<Order[]>([]);
+    const { isWholesale } = useAdminMode();
+    const [orders, setOrders] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
     const [filter, setFilter] = useState('all');
 
-    const fetchOrders = async () => { const data = await getOrders(); setOrders(data); setLoading(false); };
+    const fetchOrders = async () => {
+        const data = await getOrders();
+        setOrders(data);
+        setLoading(false);
+    };
 
     useEffect(() => { fetchOrders(); }, []);
 
@@ -33,14 +30,20 @@ export default function OrdersPage() {
     const formatPrice = (n: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n);
     const formatDate = (d: string) => new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
 
+    // Filter by Mode (Wholesale vs Retail)
+    const modeFilteredOrders = orders.filter(o => {
+        const role = o.user?.role || 'retail';
+        return isWholesale ? role === 'wholesale' : role === 'retail';
+    });
+
     const stats = [
-        { label: 'Total', value: orders.length, icon: Package, gradient: 'linear-gradient(135deg, #3b82f6, #2563eb)' },
-        { label: 'Pending', value: orders.filter(o => o.status === 'pending').length, icon: Clock, gradient: 'linear-gradient(135deg, #f59e0b, #d97706)' },
-        { label: 'Shipped', value: orders.filter(o => o.status === 'shipped').length, icon: Truck, gradient: 'linear-gradient(135deg, #8b5cf6, #7c3aed)' },
-        { label: 'Delivered', value: orders.filter(o => o.status === 'delivered').length, icon: CheckCircle, gradient: 'linear-gradient(135deg, #10b981, #059669)' },
+        { label: 'Total', value: modeFilteredOrders.length, icon: Package, gradient: 'linear-gradient(135deg, #3b82f6, #2563eb)' },
+        { label: 'Pending', value: modeFilteredOrders.filter(o => o.status === 'pending').length, icon: Clock, gradient: 'linear-gradient(135deg, #f59e0b, #d97706)' },
+        { label: 'Shipped', value: modeFilteredOrders.filter(o => o.status === 'shipped').length, icon: Truck, gradient: 'linear-gradient(135deg, #8b5cf6, #7c3aed)' },
+        { label: 'Delivered', value: modeFilteredOrders.filter(o => o.status === 'delivered').length, icon: CheckCircle, gradient: 'linear-gradient(135deg, #10b981, #059669)' },
     ];
 
-    const filtered = orders.filter(o => {
+    const filtered = modeFilteredOrders.filter(o => {
         if (filter !== 'all' && o.status !== filter) return false;
         if (search && !o.id.toLowerCase().includes(search.toLowerCase())) return false;
         return true;
@@ -123,7 +126,7 @@ export default function OrdersPage() {
                                         <td style={{ color: '#d1d5db', fontSize: 13, maxWidth: 250 }}>
                                             {order.items && order.items.length > 0 ? (
                                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                                    {order.items.slice(0, 2).map((item, i) => (
+                                                    {order.items.slice(0, 2).map((item: any, i: number) => (
                                                         <span key={i}>
                                                             {item.quantity}x {item.product?.name || 'Item'} <span style={{ color: '#6b7280' }}>({item.size})</span>
                                                         </span>
